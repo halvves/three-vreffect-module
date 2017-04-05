@@ -1,7 +1,7 @@
 {
   "name": "three-vreffect-module",
   "description": "THREE.VREffect as a module (if you're into that sort of thing)",
-  "version": "0.0.0",
+  "version": "1.0.0",
   "repository": "https://github.com/halvves/three-vreffect-module.git",
   "bugs": {
     "url": "https://github.com/halvves/three-vreffect-module/issues"
