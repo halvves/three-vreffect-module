@@ -20,7 +20,7 @@ effect.setSize(window.innerWidth, window.innerHeight);
 
 Converted from: https://github.com/mrdoob/three.js/blob/master/examples/js/effects/VREffect.js
 
-Currently up to date with THREE r84
+Currently up to date with THREE r85
 
 [npm-badge]: https://img.shields.io/npm/v/three-vreffect-module.svg
 [npm-badge-url]: https://www.npmjs.com/package/three-vreffect-module
