@@ -35,7 +35,6 @@ export default class VREffect {
     this.rendererSize = renderer.getSize();
     this.rendererUpdateStyle = false;
     this.rendererPixelRatio = renderer.getPixelRatio();
-    this.scale = 1;
     this.vrDisplay;
     this.vrDisplays;
 
@@ -245,10 +244,13 @@ export default class VREffect {
       }
 
       camera.matrixWorld.decompose(cameraL.position, cameraL.quaternion, cameraL.scale);
-      camera.matrixWorld.decompose(cameraR.position, cameraR.quaternion, cameraR.scale);
 
-      cameraL.translateOnAxis(this.eyeTranslationL, this.scale);
-      cameraR.translateOnAxis(this.eyeTranslationR, this.scale);
+      cameraR.position.copy(cameraL.position);
+      cameraR.quaternion.copy(cameraL.quaternion);
+      cameraR.scale.copy(cameraL.scale);
+
+      cameraL.translateOnAxis(this.eyeTranslationL, cameraL.scale.x);
+      cameraR.translateOnAxis(this.eyeTranslationR, cameraR.scale.x);
 
       if (vrDisplay.getFrameData) {
         vrDisplay.depthNear = camera.near;
