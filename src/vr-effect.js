@@ -2,6 +2,7 @@ import {
   Vector3,
   Matrix4,
   PerspectiveCamera,
+  Quaternion,
 } from 'three';
 
     /**
@@ -27,8 +28,13 @@ export default class VREffect {
     this.defaultRightBounds = [0.5, 0.0, 0.5, 1.0];
     this.eyeTranslationL = new Vector3();
     this.eyeTranslationR = new Vector3();
+    this.eyeMatrixL = new Matrix4();
+    this.eyeMatrixR = new Matrix4();
+    this.headMatrix = new Matrix4();
     this.frameData = null;
     this.isPresenting = false;
+    this.poseOrientation = new Quaternion();
+    this.posePosition = new Vector3();
     this.renderer = renderer;
     this.renderRectL;
     this.renderRectR;
@@ -170,6 +176,8 @@ export default class VREffect {
   render(scene, camera, renderTarget, forceClear) {
     const cameraL = this.cameraL;
     const cameraR = this.cameraR;
+    const eyeTranslationL = this.eyeTranslationL;
+    const eyeTranslationR = this.eyeTranslationR;
     const frameData = this.frameData;
     const renderer = this.renderer;
     const vrDisplay = this.vrDisplay;
@@ -181,12 +189,6 @@ export default class VREffect {
         scene.updateMatrixWorld();
         scene.autoUpdate = false;
       }
-
-      const eyeParamsL = vrDisplay.getEyeParameters('left');
-      const eyeParamsR = vrDisplay.getEyeParameters('right');
-
-      this.eyeTranslationL.fromArray(eyeParamsL.offset);
-      this.eyeTranslationR.fromArray(eyeParamsR.offset);
 
       if (Array.isArray(scene)) {
         console.warn( 'VREffect.render() no longer supports arrays. Use object.layers instead.' );
@@ -249,9 +251,6 @@ export default class VREffect {
       cameraR.quaternion.copy(cameraL.quaternion);
       cameraR.scale.copy(cameraL.scale);
 
-      cameraL.translateOnAxis(this.eyeTranslationL, cameraL.scale.x);
-      cameraR.translateOnAxis(this.eyeTranslationR, cameraR.scale.x);
-
       if (vrDisplay.getFrameData) {
         vrDisplay.depthNear = camera.near;
         vrDisplay.depthFar = camera.far;
@@ -259,9 +258,28 @@ export default class VREffect {
 
         cameraL.projectionMatrix.elements = frameData.leftProjectionMatrix;
         cameraR.projectionMatrix.elements = frameData.rightProjectionMatrix;
+
+        this.getEyeMatrices(frameData);
+
+        cameraL.updateMatrix();
+        cameraL.matrix.multiply(this.eyeMatrixL);
+        cameraL.matrix.decompose(cameraL.position, cameraL.quaternion, cameraL.scale);
+
+        cameraR.updateMatrix();
+        cameraR.matrix.multiply(this.eyeMatrixR);
+        cameraR.matrix.decompose(cameraR.position, cameraR.quaternion, cameraR.scale);
       } else {
+        const eyeParamsL = vrDisplay.getEyeParameters('left');
+        const eyeParamsR = vrDisplay.getEyeParameters('right');
+
         cameraL.projectionMatrix = this.fovToProjection(eyeParamsL.fieldOfView, true, camera.near, camera.far);
         cameraR.projectionMatrix = this.fovToProjection(eyeParamsR.fieldOfView, true, camera.near, camera.far);
+
+        eyeTranslationL.fromArray(eyeParamsL.offset);
+        eyeTranslationR.fromArray(eyeParamsR.offset);
+
+        cameraL.translateOnAxis(eyeTranslationL, cameraL.scale.x);
+        cameraR.translateOnAxis(eyeTranslationR, cameraR.scale.x);
       }
 
       // render left eye
@@ -351,6 +369,55 @@ export default class VREffect {
   dispose() {
     window.removeEventListener('vrdisplaypresentchange', this.onVRDisplayPresentChange, false);
   };
+
+  getEyeMatrices(frameData) {
+    const eyeMatrixL = this.eyeMatrixL;
+    const eyeMatrixR = this.eyeMatrixR;
+    const headMatrix = this.headMatrix;
+    const poseOrientation = this.poseOrientation;
+    const posePosition = this.posePosition;
+
+    // Compute the matrix for the position of the head based on the pose
+    if (frameData.pose.orientation) {
+      poseOrientation.fromArray(frameData.pose.orientation);
+      headMatrix.makeRotationFromQuaternion(poseOrientation);
+    }	else {
+      headMatrix.identity();
+    }
+
+    if (frameData.pose.position) {
+      posePosition.fromArray(frameData.pose.position);
+      headMatrix.setPosition(posePosition);
+    }
+
+    /* * * *
+    * The view matrix transforms vertices from sitting space to eye space.
+    * As such, the view matrix can be thought of as a product of two matrices:
+    *
+    * headToEyeMatrix * sittingToHeadMatrix
+    */
+
+    /* * * *
+    * The headMatrix that we've calculated above is the model matrix of the
+    * head in sitting space, which is the inverse of sittingToHeadMatrix.
+    *
+    * So when we multiply the view matrix with headMatrix, we're left with
+    * headToEyeMatrix:
+    *
+    * viewMatrix * headMatrix =
+    * headToEyeMatrix * sittingToHeadMatrix * headMatrix =
+    * headToEyeMatrix
+    */
+    eyeMatrixL.fromArray(frameData.leftViewMatrix);
+    eyeMatrixL.multiply(headMatrix);
+    eyeMatrixR.fromArray(frameData.rightViewMatrix);
+    eyeMatrixR.multiply(headMatrix);
+
+    // The eye's model matrix in head space is the inverse of headToEyeMatrix
+    // we calculated above.
+    eyeMatrixL.getInverse(eyeMatrixL);
+    eyeMatrixR.getInverse(eyeMatrixR);
+  }
 
   fovToNDCScaleOffset(fov) {
     const pxscale = 2.0 / (fov.leftTan + fov.rightTan);
